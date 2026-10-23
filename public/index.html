@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CrazyAI</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --border: #e6e8ef;
+    --text: #1f2333;
+    --muted: #7a7f95;
+    --primary: #6366f1;
+    --primary-soft: #eef0ff;
+    --user-bubble: linear-gradient(135deg, #6366f1, #818cf8);
+    --ai-bubble: #ffffff;
+    --tool-bg: #fffbe6;
+    --tool-border: #f0e2a0;
+    --shadow-sm: 0 1px 2px rgba(20, 22, 40, 0.05);
+    --shadow-md: 0 4px 16px rgba(20, 22, 40, 0.08);
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  button, input, textarea { font-family: inherit; }
+
+  /* ---------- 布局 ---------- */
+  .app {
+    display: flex;
+    height: 100vh;
+  }
+
+  .sidebar {
+    width: 240px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #ec4899);
+    display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 14px;
+  }
+
+  .brand { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+
+  .new-chat {
+    margin: 12px 12px 4px;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .new-chat:hover { background: #5457e5; box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .new-chat:active { transform: translateY(0); }
+
+  .session-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .session-item {
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease;
+    animation: fadeIn 0.2s ease-out;
+  }
+  .session-item:hover { background: #f2f3f9; }
+  .session-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 500; }
+
+  .session-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .session-del {
+    opacity: 0;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 0 4px;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+  .session-item:hover .session-del { opacity: 1; }
+  .session-del:hover { color: #ef4444; }
+
+  /* ---------- 主区 ---------- */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .tab {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--muted);
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .tab:hover { background: #f2f3f9; color: var(--text); }
+  .tab.active { background: var(--primary-soft); color: var(--primary); font-weight: 500; }
+
+  .panels { flex: 1; position: relative; overflow: hidden; }
+
+  .panel {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel.active {
+    display: flex;
+    animation: fadeIn 0.25s ease-out;
+  }
+
+  /* ---------- 对话面板 ---------- */
+  .chat-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 20px;
+    scroll-behavior: smooth;
+  }
+
+  .chat-inner {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  .msg {
+    margin: 12px 0;
+    display: flex;
+    animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .msg.user { justify-content: flex-end; }
+  .msg.ai { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 82%;
+    padding: 11px 15px;
+    border-radius: 16px;
+    line-height: 1.6;
+    font-size: 14.5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .msg.user .bubble {
+    background: var(--user-bubble);
+    color: #fff;
+    border-bottom-right-radius: 6px;
+  }
+
+  .msg.ai .bubble {
+    background: var(--ai-bubble);
+    color: var(--text);
+    border-bottom-left-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .bubble.error {
+    background: #fef2f2 !important;
+    color: #b91c1c !important;
+    border-color: #fecaca !important;
+  }
+
+  /* 工具卡片 */
+  .tool-card {
+    margin: 8px 0;
+    background: var(--tool-bg);
+    border: 1px solid var(--tool-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-family: "SF Mono", Consolas, Monaco, monospace;
+    font-size: 12px;
+    color: #7a6a1f;
+    max-width: 82%;
+    animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+  }
+  .tool-card .tool-head {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tool-card .tool-args { opacity: 0.75; word-break: break-all; }
+  .tool-card .tool-result {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--tool-border);
+    white-space: pre-wrap;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+
+  /* 打字机光标 */
+  .typing::after {
+    content: "▍";
+    display: inline-block;
+    animation: blink 1s steps(2) infinite;
+    color: var(--primary);
+    margin-left: 2px;
+  }
+
+  /* 加载三点 */
+  .dots { display: inline-flex; gap: 3px; }
+  .dots span {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--muted);
+    animation: bounce 1.4s infinite ease-in-out both;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.16s; }
+  .dots span:nth-child(3) { animation-delay: 0.32s; }
+
+  /* 输入框 */
+  .composer {
+    padding: 14px 20px 18px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+
+  .composer-inner {
+    max-width: 780px;
+    margin: 0 auto;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .composer-inner:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+
+  .composer input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 8px 10px;
+    font-size: 14.5px;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .send-btn {
+    border: none;
+    background: var(--primary);
+    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .send-btn:hover:not(:disabled) { background: #5457e5; transform: scale(1.05); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ---------- 通用内容面板 ---------- */
+  .content-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 20px;
+  }
+  .content-inner {
+    max-width: 780px;
+    margin: 0 auto;
+    animation: fadeIn 0.25s ease-out;
+  }
+
+  .content-inner h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 24px 0 12px;
+  }
+  .content-inner h3:first-child { margin-top: 0; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-sm);
+    animation: fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .field label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .field input, .field textarea {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-size: 13.5px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    background: #fbfbfd;
+  }
+  .field input:focus, .field textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    background: #fff;
+  }
+  .field textarea {
+    font-family: "SF Mono", Consolas, Monaco, monospace;
+    min-height: 180px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+
+  .btn {
+    border: none;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn.primary { background: var(--primary); color: #fff; }
+  .btn.primary:hover { background: #5457e5; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn.ghost { background: #f2f3f9; color: var(--text); }
+  .btn.ghost:hover { background: #e6e8ef; }
+  .btn.danger { background: #fee2e2; color: #b91c1c; }
+  .btn.danger:hover { background: #fecaca; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .endpoint-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .endpoint-name { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .endpoint-badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .endpoint-badge.active { background: #dcfce7; color: #15803d; }
+  .endpoint-meta { font-size: 12px; color: var(--muted); font-family: monospace; word-break: break-all; }
+
+  .status {
+    font-size: 12px;
+    margin-top: 8px;
+    min-height: 16px;
+    transition: opacity 0.2s ease;
+  }
+  .status.ok { color: #15803d; }
+  .status.fail { color: #b91c1c; }
+  .status.pending { color: var(--muted); }
+
+  /* 滚动条美化 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d4d6e0; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #b6b9c7; }
+
+  /* ---------- 动画 ---------- */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  .empty {
+    color: var(--muted);
+    font-size: 13.5px;
+    text-align: center;
+    padding: 40px 0;
+    animation: fadeIn 0.3s ease-out;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">C</div>
+      <div class="brand">CrazyAI</div>
+    </div>
+    <button class="new-chat" id="newChat">+ 新会话</button>
+    <div class="session-list" id="sessionList"></div>
+  </aside>
+
+  <main class="main">
+    <nav class="tabs">
+      <button class="tab active" data-tab="chat">对话</button>
+      <button class="tab" data-tab="skills">技能</button>
+      <button class="tab" data-tab="api">API</button>
+    </nav>
+
+    <div class="panels">
+      <!-- 对话 -->
+      <section class="panel active" id="panel-chat">
+        <div class="chat-scroll" id="chatScroll">
+          <div class="chat-inner" id="log"></div>
+        </div>
+        <form class="composer" id="chatForm">
+          <div class="composer-inner">
+            <input id="input" placeholder="说点什么..." autocomplete="off" />
+            <button class="send-btn" type="submit" id="sendBtn" title="发送">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 技能 -->
+      <section class="panel" id="panel-skills">
+        <div class="content-scroll">
+          <div class="content-inner">
+            <h3>已加载技能</h3>
+            <div id="skillList"></div>
+
+            <h3>上传新技能</h3>
+            <div class="card">
+              <div class="field">
+                <label>文件名</label>
+                <input id="skillName" placeholder="例如 http_get.ts" />
+              </div>
+              <div class="field">
+                <label>技能代码</label>
+                <textarea id="skillCode" placeholder="export default { name: '...', ... }"></textarea>
+              </div>
+              <div class="btn-row">
+                <button class="btn primary" id="skillUpload">上传并重载</button>
+              </div>
+              <div class="status" id="skillMsg"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- API -->
+      <section class="panel" id="panel-api">
+        <div class="content-scroll">
+          <div class="content-inner">
+            <h3>已配置端点</h3>
+            <div id="endpointList"></div>
+
+            <h3 id="epFormTitle">添加新端点</h3>
+            <div class="card">
+              <input type="hidden" id="epId" />
+              <div class="field">
+                <label>名称</label>
+                <input id="epName" placeholder="例如 智谱 GLM" />
+              </div>
+              <div class="field">
+                <label>Base URL</label>
+                <input id="epBaseUrl" placeholder="https://open.bigmodel.cn/api/paas/v4 或 http://localhost:11434/v1" />
+              </div>
+              <div class="field">
+                <label>API Key（本地 Ollama 等可留空）</label>
+                <input id="epApiKey" type="password" placeholder="留空则不发送 Authorization 头" />
+              </div>
+              <div class="field">
+                <label>模型名</label>
+                <input id="epModel" placeholder="例如 glm-4-flash / llama3.2" />
+              </div>
+              <div class="btn-row">
+                <button class="btn primary" id="epSave">保存</button>
+                <button class="btn ghost" id="epTest">测试连接</button>
+                <button class="btn ghost" id="epReset">清空表单</button>
+              </div>
+              <div class="status" id="epMsg"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ================= 工具函数 ================= */
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+
+/* ================= Tab 切换 ================= */
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $('panel-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'skills') loadSkills();
+    if (tab.dataset.tab === 'api') loadEndpoints();
+  });
+});
+
+/* ================= 会话管理 ================= */
+let currentSessionId = null;
+let sending = false;
+
+async function loadSessions() {
+  const list = await (await fetch('/api/sessions')).json();
+  const box = $('sessionList');
+  box.innerHTML = '';
+
+  if (list.length === 0) {
+    const empty = el('div', 'empty', '还没有会话');
+    box.appendChild(empty);
+    return;
+  }
+
+  for (const s of list) {
+    const item = el('div', 'session-item' + (s.id === currentSessionId ? ' active' : ''));
+    item.dataset.id = s.id;
+
+    const title = el('div', 'session-title', s.title || '(新会话)');
+    const del = el('button', 'session-del', '×');
+    del.title = '删除';
+    del.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('删除这个会话？')) return;
+      await fetch('/api/sessions/' + s.id, { method: 'DELETE' });
+      if (s.id === currentSessionId) {
+        currentSessionId = null;
+        $('log').innerHTML = '';
+      }
+      loadSessions();
+    });
+
+    item.appendChild(title);
+    item.appendChild(del);
+    item.addEventListener('click', () => switchSession(s.id));
+    box.appendChild(item);
+  }
+}
+
+async function switchSession(id) {
+  if (sending) return;
+  currentSessionId = id;
+  await loadSessions();
+  await renderHistory();
+}
+
+async function newSession() {
+  const s = await (await fetch('/api/sessions', { method: 'POST' })).json();
+  currentSessionId = s.id;
+  $('log').innerHTML = '';
+  await loadSessions();
+}
+
+async function ensureSession() {
+  if (!currentSessionId) await newSession();
+  return currentSessionId;
+}
+
+/* ================= 历史渲染 ================= */
+async function renderHistory() {
+  const log = $('log');
+  log.innerHTML = '';
+  if (!currentSessionId) return;
+
+  const msgs = await (await fetch('/api/sessions/' + currentSessionId + '/messages')).json();
+
+  // 建立 tool_call_id -> tool name 映射，用于渲染工具卡片标题
+  const toolNameById = new Map();
+
+  for (const m of msgs) {
+    if (m.role === 'user') {
+      appendBubble('user', m.content ?? '');
+    } else if (m.role === 'assistant') {
+      if (m.tool_calls) {
+        for (const tc of m.tool_calls) {
+          if (tc.id) toolNameById.set(tc.id, tc.function?.name ?? '工具');
+        }
+      }
+      if (m.content) appendBubble('ai', m.content);
+    } else if (m.role === 'tool') {
+      const name = toolNameById.get(m.tool_call_id) ?? '工具';
+      appendToolCard(name, null, m.content ?? '');
+    }
+  }
+
+  scrollToBottom();
+}
+
+function appendBubble(role, text) {
+  const wrap = el('div', 'msg ' + role);
+  const bubble = el('div', 'bubble');
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+  $('log').appendChild(wrap);
+  return bubble;
+}
+
+function appendToolCard(name, argsStr, result) {
+  const card = el('div', 'tool-card');
+  const head = el('div', 'tool-head');
+  head.textContent = '🔧 ' + name;
+  card.appendChild(head);
+
+  if (argsStr) {
+    const a = el('div', 'tool-args');
+    a.textContent = argsStr;
+    card.appendChild(a);
+  }
+  if (result !== undefined && result !== null) {
+    const r = el('div', 'tool-result');
+    r.textContent = result;
+    card.appendChild(r);
+  }
+
+  $('log').appendChild(card);
+  return card;
+}
+
+function scrollToBottom() {
+  const s = $('chatScroll');
+  s.scrollTop = s.scrollHeight;
+}
+
+/* ================= 聊天（流式） ================= */
+const chatForm = $('chatForm');
+const input = $('input');
+const sendBtn = $('sendBtn');
+
+chatForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (sending) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  await ensureSession();
+
+  appendBubble('user', text);
+  scrollToBottom();
+
+  sending = true;
+  sendBtn.disabled = true;
+
+  // 当前流式 AI 消息容器
+  let currentTextEl = null;
+  let currentText = '';
+
+  const ensureTextEl = () => {
+    if (!currentTextEl) {
+      const wrap = el('div', 'msg ai');
+      const bubble = el('div', 'bubble typing');
+      wrap.appendChild(bubble);
+      $('log').appendChild(wrap);
+      currentTextEl = bubble;
+      scrollToBottom();
+    }
+    return currentTextEl;
+  };
+
+  try {
+    const res = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: currentSessionId, message: text }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      appendBubble('ai', '出错: ' + (err.error || res.status)).classList.add('error');
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') continue;
+
+        let evt;
+        try { evt = JSON.parse(data); } catch { continue; }
+
+        if (evt.type === 'text') {
+          const b = ensureTextEl();
+          currentText += evt.content;
+          b.textContent = currentText;
+          scrollToBottom();
+        } else if (evt.type === 'tool_start') {
+          // 结束当前文本块
+          if (currentTextEl) {
+            currentTextEl.classList.remove('typing');
+            currentTextEl = null;
+            currentText = '';
+          }
+          const card = appendToolCard(evt.name, evt.args, null);
+          card.dataset.pending = '1';
+          scrollToBottom();
+        } else if (evt.type === 'tool_end') {
+          const cards = $('log').querySelectorAll('.tool-card[data-pending]');
+          const last = cards[cards.length - 1];
+          if (last) {
+            delete last.dataset.pending;
+            const r = el('div', 'tool-result');
+            r.textContent = evt.result;
+            last.appendChild(r);
+          }
+          scrollToBottom();
+        } else if (evt.type === 'error') {
+          if (currentTextEl) {
+            currentTextEl.classList.remove('typing');
+            currentTextEl = null;
+            currentText = '';
+          }
+          const b = appendBubble('ai', '出错: ' + evt.message);
+          b.classList.add('error');
+          scrollToBottom();
+        } else if (evt.type === 'done') {
+          if (currentTextEl) currentTextEl.classList.remove('typing');
+        }
+      }
+    }
+
+    if (currentTextEl) currentTextEl.classList.remove('typing');
+  } catch (e) {
+    if (currentTextEl) currentTextEl.classList.remove('typing');
+    appendBubble('ai', '请求失败: ' + e.message).classList.add('error');
+  } finally {
+    sending = false;
+    sendBtn.disabled = false;
+    loadSessions();
+  }
+});
+
+/* ================= 技能页 ================= */
+async function loadSkills() {
+  const box = $('skillList');
+  box.innerHTML = '';
+  const list = await (await fetch('/api/skills')).json();
+
+  if (list.length === 0) {
+    box.appendChild(el('div', 'empty', '还没有技能'));
+    return;
+  }
+
+  for (const s of list) {
+    const card = el('div', 'card');
+    const name = el('div', 'endpoint-name');
+    name.textContent = s.name;
+    const desc = el('div', 'endpoint-meta', s.description);
+    desc.style.fontFamily = 'inherit';
+    desc.style.marginTop = '6px';
+    card.appendChild(name);
+    card.appendChild(desc);
+    box.appendChild(card);
+  }
+}
+
+$('skillUpload').addEventListener('click', async () => {
+  const filename = $('skillName').value.trim();
+  const content = $('skillCode').value;
+  const msg = $('skillMsg');
+
+  if (!filename || !content) {
+    msg.textContent = '请填写文件名和代码';
+    msg.className = 'status fail';
+    return;
+  }
+
+  msg.textContent = '上传中...';
+  msg.className = 'status pending';
+
+  const res = await fetch('/api/skills', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, content }),
+  });
+  const data = await res.json();
+
+  if (data.error) {
+    msg.textContent = '失败: ' + data.error;
+    msg.className = 'status fail';
+    return;
+  }
+
+  msg.textContent = '上传成功，已重载';
+  msg.className = 'status ok';
+  $('skillName').value = '';
+  $('skillCode').value = '';
+  loadSkills();
+});
+
+/* ================= API 端点页 ================= */
+async function loadEndpoints() {
+  const cfg = await (await fetch('/api/endpoints')).json();
+  const box = $('endpointList');
+  box.innerHTML = '';
+
+  if (cfg.endpoints.length === 0) {
+    box.appendChild(el('div', 'empty', '还没有配置任何端点'));
+    return;
+  }
+
+  for (const ep of cfg.endpoints) {
+    const card = el('div', 'card');
+    const head = el('div', 'endpoint-head');
+
+    const nameWrap = el('div', 'endpoint-name');
+    nameWrap.textContent = ep.name || '未命名';
+    if (ep.id === cfg.activeEndpointId) {
+      const badge = el('span', 'endpoint-badge active', '当前使用');
+      nameWrap.appendChild(badge);
+    }
+    head.appendChild(nameWrap);
+
+    const btnRow = el('div', 'btn-row');
+    if (ep.id !== cfg.activeEndpointId) {
+      const useBtn = el('button', 'btn ghost', '启用');
+      useBtn.addEventListener('click', async () => {
+        await fetch('/api/endpoints/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: ep.id }),
+        });
+        loadEndpoints();
+      });
+      btnRow.appendChild(useBtn);
+    }
+    const editBtn = el('button', 'btn ghost', '编辑');
+    editBtn.addEventListener('click', () => fillForm(ep));
+    btnRow.appendChild(editBtn);
+
+    const delBtn = el('button', 'btn danger', '删除');
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('删除端点 ' + ep.name + '?')) return;
+      await fetch('/api/endpoints/' + ep.id, { method: 'DELETE' });
+      loadEndpoints();
+    });
+    btnRow.appendChild(delBtn);
+
+    head.appendChild(btnRow);
+    card.appendChild(head);
+
+    const meta = el('div', 'endpoint-meta');
+    meta.textContent = `${ep.baseUrl}  ·  ${ep.model}  ·  key: ${ep.apiKey ? '已设置' : '无'}`;
+    card.appendChild(meta);
+
+    box.appendChild(card);
+  }
+}
+
+function fillForm(ep) {
+  $('epId').value = ep.id ?? '';
+  $('epName').value = ep.name ?? '';
+  $('epBaseUrl').value = ep.baseUrl ?? '';
+  $('epApiKey').value = ep.apiKey ?? '';
+  $('epModel').value = ep.model ?? '';
+  $('epFormTitle').textContent = ep.id ? '编辑端点' : '添加新端点';
+  $('epMsg').textContent = '';
+}
+
+function resetForm() {
+  fillForm({});
+  $('epFormTitle').textContent = '添加新端点';
+}
+
+$('epReset').addEventListener('click', resetForm);
+
+$('epSave').addEventListener('click', async () => {
+  const msg = $('epMsg');
+  const body = {
+    id: $('epId').value || undefined,
+    name: $('epName').value.trim() || '未命名',
+    baseUrl: $('epBaseUrl').value.trim(),
+    apiKey: $('epApiKey').value.trim(),
+    model: $('epModel').value.trim(),
+  };
+
+  if (!body.baseUrl || !body.model) {
+    msg.textContent = 'Base URL 和模型名必填';
+    msg.className = 'status fail';
+    return;
+  }
+
+  msg.textContent = '保存中...';
+  msg.className = 'status pending';
+
+  const res = await fetch('/api/endpoints', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+
+  if (data.error) {
+    msg.textContent = '失败: ' + data.error;
+    msg.className = 'status fail';
+    return;
+  }
+
+  msg.textContent = '已保存';
+  msg.className = 'status ok';
+  resetForm();
+  loadEndpoints();
+});
+
+$('epTest').addEventListener('click', async () => {
+  const msg = $('epMsg');
+  const body = {
+    baseUrl: $('epBaseUrl').value.trim(),
+    apiKey: $('epApiKey').value.trim(),
+    model: $('epModel').value.trim(),
+  };
+
+  if (!body.baseUrl || !body.model) {
+    msg.textContent = '先填 Base URL 和模型名';
+    msg.className = 'status fail';
+    return;
+  }
+
+  msg.textContent = '正在测试连接...';
+  msg.className = 'status pending';
+  $('epTest').disabled = true;
+
+  try {
+    const res = await fetch('/api/endpoints/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      msg.textContent = `✓ 连接成功（${data.elapsed}ms, HTTP ${data.status}）`;
+      msg.className = 'status ok';
+    } else {
+      msg.textContent = `✗ 连接失败${data.status ? '（HTTP ' + data.status + '）' : ''}: ${data.error || '未知错误'}`;
+      msg.className = 'status fail';
+    }
+  } catch (e) {
+    msg.textContent = '测试失败: ' + e.message;
+    msg.className = 'status fail';
+  } finally {
+    $('epTest').disabled = false;
+  }
+});
+
+/* ================= 新会话按钮 ================= */
+$('newChat').addEventListener('click', () => {
+  if (sending) return;
+  newSession();
+});
+
+/* ================= 启动 ================= */
+(async () => {
+  await loadSessions();
+  if (!currentSessionId) {
+    const cfg = await (await fetch('/api/sessions')).json();
+    if (cfg.length > 0) {
+      currentSessionId = cfg[0].id;
+      await loadSessions();
+      await renderHistory();
+    }
+  }
+})();
+</script>
+</body>
+</html>
